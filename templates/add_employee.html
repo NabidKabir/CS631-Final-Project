@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Add New Employee{% endblock %}
+
+{% block content %}
+    <h1>➕ Add New Employee</h1>
+
+    <form method="POST" action="{{ url_for('add_employee') }}" style="display: flex; flex-direction: column; gap: 15px; max-width: 400px; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white;">
+        
+        <label>Employee Name:</label>
+        <input type="text" name="employee_name" required>
+
+        <label>Phone Number:</label>
+        <input type="text" name="phone_number" required>
+
+        <label>Job Title (Must exist in EmployeeTitle table):</label>
+        <input type="text" name="title" placeholder="e.g., VP of Technology" required>
+
+        <label>Affiliation Type:</label>
+        <select name="affiliation_type" id="affiliation_type" onchange="toggleAffiliationFields()" required>
+            <option value="">-- Select Affiliation --</option>
+            <option value="department">Department</option>
+            <option value="division">Direct Division</option>
+        </select>
+        
+        <div id="department_field" style="display: none;">
+            <label>Department Name:</label>
+            <input type="text" name="department_name" id="dept_name_input" placeholder="e.g., Software Development">
+        </div>
+
+        <div id="division_field" style="display: none;">
+            <label>Division Name:</label>
+            <input type="text" name="division_name" id="div_name_input" placeholder="e.g., Executive">
+        </div>
+
+        <label>Pay Type:</label>
+        <select name="pay_type" id="pay_type" onchange="togglePayRateField()" required>
+            <option value="salaried">Salaried (Uses Title Salary)</option>
+            <option value="hourly">Hourly</option>
+        </select>
+
+        <div id="hourly_rate_field" style="display: none;">
+            <label>Hourly Rate ($):</label>
+            <input type="number" name="hourly_rate" id="hourly_rate_input" step="0.01" min="0">
+        </div>
+
+        <button type="submit" style="padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Create Employee</button>
+    </form>
+
+    <script>
+        // JavaScript to toggle fields based on selection
+        function toggleAffiliationFields() {
+            const type = document.getElementById('affiliation_type').value;
+            const deptField = document.getElementById('department_field');
+            const divField = document.getElementById('division_field');
+
+            deptField.style.display = (type === 'department') ? 'block' : 'none';
+            divField.style.display = (type === 'division') ? 'block' : 'none';
+
+            // Reset and set required attributes based on selection
+            document.getElementById('dept_name_input').removeAttribute('required');
+            document.getElementById('div_name_input').removeAttribute('required');
+            
+            if (type === 'department') {
+                document.getElementById('dept_name_input').setAttribute('required', 'required');
+            } else if (type === 'division') {
+                document.getElementById('div_name_input').setAttribute('required', 'required');
+            }
+        }
+        
+        function togglePayRateField() {
+            const payType = document.getElementById('pay_type').value;
+            const rateField = document.getElementById('hourly_rate_field');
+            const rateInput = document.getElementById('hourly_rate_input');
+
+            rateField.style.display = (payType === 'hourly') ? 'block' : 'none';
+            
+            if (payType === 'hourly') {
+                rateInput.setAttribute('required', 'required');
+            } else {
+                rateInput.removeAttribute('required');
+            }
+        }
+        // Run toggle functions on load to set initial state
+        document.addEventListener('DOMContentLoaded', () => {
+            toggleAffiliationFields();
+            togglePayRateField();
+        });
+    </script>
+{% endblock %}

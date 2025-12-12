@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Dashboard{% endblock %}
+
+{% block content %}
+    <h1>Employee and Payroll Management Dashboard</h1>
+
+    <p>View employee details and process payroll based on their title or hourly rate.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Employee No.</th>
+                <th>Name</th>
+                <th>Title</th>
+                <th>Phone No.</th>
+                <th>Current Project No.</th>
+                <th>Project Role</th>
+                <th>Project Start Date</th>
+                <th>Pay Type</th>
+                <th>Payroll Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for employee in employees %}
+            <tr>
+                <td>{{ employee.Employee_No }}</td>
+                <td>{{ employee.Employee_Name }}</td>
+                <td>{{ employee.Title }}</td>
+                <td>{{ employee.Phone_Number }}</td>
+
+                {% set active_assignment = None %}
+                {% if employee.projects_assigned|length > 0 %}
+                    {% set active_assignment = employee.projects_assigned[0] %}
+                {% endif %}
+
+                {% set is_active = (active_assignment and (active_assignment.Date_Ended is none or active_assignment.Date_Ended == '')) %}
+                
+                <td>
+                    {% if is_active %}
+                        {{ active_assignment.Project_No }}
+                    {% else %}
+                        <span>Currently not assigned</span>
+                    {% endif %}
+                </td>
+                
+                <td>
+                    {% if is_active %}
+                        {{ active_assignment.Role }}
+                    {% else %}
+                        <span>—</span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if is_active %}
+                        {{ active_assignment.Date_Started.strftime('%Y-%m-%d') if active_assignment.Date_Started else 'N/A' }}
+                    {% else %}
+                        <span>—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if employee.Is_Hourly %}
+                        <span style="color: darkorange; font-weight: bold;">Hourly (${{ "%.2f"|format(employee.Hourly_Rate or 0) }})</span>
+                    {% else %}
+                        Salaried
+                    {% endif %}
+                </td>
+                
+                <td>
+                    <form action="{{ url_for('generate_payroll', emp_id=employee.Employee_No) }}" method="POST" style="display:inline-flex; align-items: center; gap: 5px;">
+                        {% if employee.Is_Hourly %}
+                            <input type="number" name="hours" placeholder="Hours" required min="1" step="0.5" style="width: 70px;">
+                        {% endif %}
+                        <button type="submit">Process Pay</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9">No employees found. <a href="{{ url_for('add_employee') }}">Add one now</a>.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

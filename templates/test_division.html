@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Division Data Test</title>
+</head>
+<body>
+    <h1>Division Table Contents</h1>
+    
+    {% if divisions %}
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Division Name</th>
+                <th>Head Employee No.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for division in divisions %}
+            <tr>
+                <td>{{ division.Division_Name }}</td>
+                <td>
+                    {% if division.Head_Employee_No %}
+                        {{ division.Head_Employee_No }}
+                    {% else %}
+                        (None Assigned)
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p>No divisions found in the database. Check your INSERT statements.</p>
+    {% endif %}
+
+    <p><a href="/">Go Back</a></p>
+</body>
+</html>
