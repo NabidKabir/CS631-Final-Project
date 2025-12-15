@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import joinedload
 from dotenv import load_dotenv
 from datetime import datetime
+from decimal import Decimal
 import os
 
 app = Flask(__name__)
@@ -45,8 +46,15 @@ class Employee(db.Model):
     Is_Hourly = db.Column(db.Boolean, default=False)
     Hourly_Rate = db.Column(db.Numeric(10, 2))
 
-    projects_assigned = db.relationship('EmployeeProject', back_populates='employee', lazy=True)
+    projects_assigned = db.relationship(
+        'EmployeeProject', 
+        back_populates='employee', 
+        lazy=True,
+        primaryjoin="and_(Employee.Employee_No == EmployeeProject.Employee_No, EmployeeProject.Date_Ended == None)"
+    )
     payroll_history = db.relationship('PayrollHistory', backref='employee', lazy=True)
+
+    Is_Active = db.Column(db.Boolean, default=True)
 
 class Department(db.Model):
     __tablename__ = 'Department'
@@ -70,7 +78,7 @@ class Building(db.Model):
     __tablename__ = 'Building'
     Building_Code = db.Column(db.String(10), primary_key=True)
     Building_Name = db.Column(db.String(200))
-    Year_Bought = db.Column(db.Integer) # YEAR in MySQL maps well to Integer in SQLAlchemy
+    Year_Bought = db.Column(db.Integer) 
     Cost = db.Column(db.Numeric(12, 2))
     rooms = db.relationship('Room', backref='building', lazy=True)
 
@@ -123,18 +131,17 @@ class PayrollHistory(db.Model):
     Net_Pay = db.Column(db.Numeric(12, 2))
 
 
-
+#DASHBOARD
 @app.route('/')
 def index():
     """Renders the main employee list dashboard, including project data."""
     try:
-        # Fetch all employees. We use joinedload to efficiently load all 
-        # project assignments for each employee in a single query set.
-        employees = db.session.query(Employee).options(
+        # Fetch all employees.
+        employees = db.session.query(Employee).filter_by(Is_Active=True).options( 
             db.joinedload(Employee.projects_assigned)
         ).all()
         
-        # Ensure you have your templates/index.html file
+
         return render_template('index.html', employees=employees)
     except Exception as e:
         flash(f"Database Error: Could not fetch employee data. Error: {e}", 'error')
@@ -205,14 +212,24 @@ def generate_payroll(emp_id):
         
     return redirect(url_for('index'))
 
-# --- Employee Creation Route ---
+# ADD EMPLOYEE PAGE
 @app.route('/add_employee', methods=['GET', 'POST'])
 def add_employee():
-    """Displays the form or processes the form submission to add a new employee."""
+    """Displays the form or processes the form submission to add a new employee, 
+       creating new titles if necessary."""
+       
+    titles = EmployeeTitle.query.with_entities(EmployeeTitle.Title).all()
+    departments = Department.query.with_entities(Department.Department_Name).all()
+    divisions = Division.query.with_entities(Division.Division_Name).all()
+    
+    context = {
+        'titles': [t[0] for t in titles],
+        'departments': [d[0] for d in departments],
+        'divisions': [d[0] for d in divisions]
+    }
+                               
     if request.method == 'POST':
         try:
-            # 1. Gather Data from Form
-            # Get the next available Employee_No (simple method for testing)
             last_employee = Employee.query.order_by(Employee.Employee_No.desc()).first()
             new_emp_no = (last_employee.Employee_No + 1) if last_employee else 1001
 
@@ -222,26 +239,37 @@ def add_employee():
             
             pay_type = request.form['pay_type']
             is_hourly = (pay_type == 'hourly')
-            hourly_rate = request.form.get('hourly_rate') if is_hourly else None
+            hourly_rate = request.form.get('hourly_rate')
+            salary_rate = request.form.get('salary_rate') # NEW: Capture salary input
 
             affiliation_type = request.form['affiliation_type']
             dept_name = request.form.get('department_name') if affiliation_type == 'department' else None
             div_name = request.form.get('division_name') if affiliation_type == 'division' else None
             
-            # --- Input Validation (Crucial for FK Integrity) ---
+
+            existing_title = EmployeeTitle.query.get(title)
+            
+            if not existing_title:
+                # Determine the salary to save: use the submitted salary if salaried, otherwise 0.00
+                if is_hourly or not salary_rate:
+                    # If hourly, the salary field is irrelevant/empty, so set title salary to 0.00
+                    default_salary = Decimal('0.00') 
+                else:
+                    # If salaried, use the salary entered by the user to set the title's salary
+                    default_salary = Decimal(salary_rate)
+
+                new_title = EmployeeTitle(Title=title, Salary=default_salary) 
+                db.session.add(new_title)
+            
             if dept_name and not Department.query.get(dept_name):
                  flash(f"Error: Department '{dept_name}' not found.", 'error')
-                 return redirect(url_for('add_employee'))
+                 return render_template('add_employee.html', **context)
             
             if div_name and not Division.query.get(div_name):
                  flash(f"Error: Division '{div_name}' not found.", 'error')
-                 return redirect(url_for('add_employee'))
+                 return render_template('add_employee.html', **context)
             
-            if not EmployeeTitle.query.get(title):
-                 flash(f"Error: Employee Title '{title}' not found.", 'error')
-                 return redirect(url_for('add_employee'))
-            
-            # 2. Create Model Instance
+
             new_employee = Employee(
                 Employee_No=new_emp_no,
                 Employee_Name=employee_name,
@@ -253,27 +281,119 @@ def add_employee():
                 Hourly_Rate=Decimal(hourly_rate) if hourly_rate else None
             )
 
-            # 3. Commit to DB
+
             db.session.add(new_employee)
             db.session.commit()
-            flash(f"Employee {employee_name} ({new_emp_no}) successfully added!", 'success')
+            flash(f"Employee {employee_name} ({new_emp_no}) successfully added! Title '{title}' created/used.", 'success')
             return redirect(url_for('index'))
 
         except Exception as e:
             db.session.rollback()
             flash(f"Error adding employee: {e}", 'error')
-            return redirect(url_for('add_employee'))
 
-    # If GET request, just render the empty form
-    return render_template('add_employee.html')
+            return render_template('add_employee.html', **context)
 
+    return render_template('add_employee.html', **context)
+
+# EDIT EMPLOYEE
+@app.route('/edit_employee/<int:emp_id>', methods=['GET', 'POST'])
+def edit_employee(emp_id):
+    """Handles displaying the pre-filled form and processing updates for an employee."""
+    
+    # Fetch necessary data for context (titles, departments, divisions)
+    titles = EmployeeTitle.query.with_entities(EmployeeTitle.Title).all()
+    departments = Department.query.with_entities(Department.Department_Name).all()
+    divisions = Division.query.with_entities(Division.Division_Name).all()
+    
+    context = {
+        'titles': [t[0] for t in titles],
+        'departments': [d[0] for d in departments],
+        'divisions': [d[0] for d in divisions]
+    }
+    
+    employee = Employee.query.get_or_404(emp_id)
+
+    if request.method == 'GET':
+        return render_template('edit_employee.html', employee=employee, **context)
+
+    if request.method == 'POST':
+        try:
+
+            # Basic Info
+            employee.Employee_Name = request.form['employee_name']
+            employee.Phone_Number = request.form['phone_number']
+            new_title = request.form['title']
+            
+            # Payroll Info
+            pay_type = request.form['pay_type']
+            is_hourly = (pay_type == 'hourly')
+            hourly_rate = request.form.get('hourly_rate')
+            salary_rate = request.form.get('salary_rate')
+
+            employee.Is_Hourly = is_hourly
+            employee.Hourly_Rate = Decimal(hourly_rate) if hourly_rate and is_hourly else None
+
+            if new_title != employee.Title: 
+                existing_title_obj = EmployeeTitle.query.get(new_title)
+                
+                if not existing_title_obj:
+                    if is_hourly or not salary_rate:
+                        default_salary = Decimal('0.00') 
+                    else:
+                        default_salary = Decimal(salary_rate)
+
+                    new_title_obj = EmployeeTitle(Title=new_title, Salary=default_salary)
+                    db.session.add(new_title_obj)
+            
+            employee.Title = new_title 
+
+            affiliation_type = request.form['affiliation_type']
+            
+            if affiliation_type == 'department':
+                employee.Department_Name = request.form.get('department_name')
+                employee.Division_Name = None
+            elif affiliation_type == 'division':
+                employee.Division_Name = request.form.get('division_name')
+                employee.Department_Name = None
+            
+            db.session.commit()
+            flash(f"Employee {employee.Employee_Name}'s record (ID: {emp_id}) updated successfully!", 'success')
+            return redirect(url_for('index'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating employee {employee.Employee_Name}. Error: {e}", 'error')
+            return render_template('edit_employee.html', employee=employee, **context)
+
+# FIRE EMPLOYEE     
+@app.route('/fire_employee/<int:emp_id>', methods=['POST'])
+def fire_employee(emp_id):
+    employee = Employee.query.get_or_404(emp_id)
+    
+    try:
+        is_div_head = Division.query.filter_by(Head_Employee_No=emp_id).first()
+        is_dept_head = Department.query.filter_by(Head_Employee_No=emp_id).first()
+        
+        if is_div_head or is_dept_head:
+            db.session.rollback()
+            # Prevent firing if the employee is still leading a team
+            flash(f"Cannot terminate {employee.Employee_Name}. They must first be relieved of their duties as a Division Head or Department Head.", 'error')
+            return redirect(url_for('index'))
+            
+        employee.Is_Active = False
+        db.session.commit()
+        flash(f"Employee {employee.Employee_Name} ({emp_id}) has been successfully terminated.", 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Failed to terminate employee {employee.Employee_Name}. Error: {e}", 'error')
+        
+    return redirect(url_for('index'))
+
+# PAYROLL HISTORY PAGE
 @app.route('/payroll_history')
 def payroll_history():
-    """Renders a list of all payroll history records."""
     try:
-        # Fetch all payroll history records.
-        # We use joinedload to grab the related 'employee' object in the same query
-        # This prevents multiple database hits (N+1 problem) when accessing the employee name in the template.
         history_records = db.session.query(PayrollHistory).options(
             joinedload(PayrollHistory.employee)
         ).order_by(PayrollHistory.Payment_Date.desc()).all()

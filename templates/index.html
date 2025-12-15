@@ -19,6 +19,8 @@
                 <th>Project Start Date</th>
                 <th>Pay Type</th>
                 <th>Payroll Action</th>
+                <th>Edit</th>
+                <th>Termination</th>
             </tr>
         </thead>
         <tbody>
@@ -72,7 +74,23 @@
                         {% if employee.Is_Hourly %}
                             <input type="number" name="hours" placeholder="Hours" required min="1" step="0.5" style="width: 70px;">
                         {% endif %}
-                        <button type="submit">Process Pay</button>
+                        <button type="submit" style="background-color: green; color: white; border: none; padding: 5px 10px; cursor: pointer;">
+                            Process Pay
+                        </button>
+                    </form>
+                </td>
+                <td>
+                    <a href = "{{ url_for('edit_employee', emp_id=employee.Employee_No) }}" style="background-color: lightblue; color: white; border: none; padding: 5px 10px; text-decoration: none;">
+                        Edit
+                    </a>
+                </td>
+                <td>
+                    <form action="{{ url_for('fire_employee', emp_id=employee.Employee_No) }}" method="POST" 
+                          onsubmit="return confirm('Are you sure you want to terminate {{ employee.Employee_Name }}? This action still preserves record history.');"
+                          style="display:inline-block;">
+                        <button type="submit" style="background-color: red; color: white; border: none; padding: 5px 10px; cursor: pointer;">
+                            Fire Employee
+                        </button>
                     </form>
                 </td>
             </tr>

@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Add New Employee{% endblock %}
+{% block title %}Edit Employee: {{ employee.Employee_Name }}{% endblock %}
 
 {% block content %}
-    <h1>Add New Employee</h1>
+    <h1>✏️ Edit Employee: {{ employee.Employee_Name }} (ID: {{ employee.Employee_No }})</h1>
     <p><a href="{{ url_for('index') }}">← Back to Dashboard</a></p>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -14,17 +14,17 @@
         {% endif %}
     {% endwith %}
 
-    <form method="POST">
+    <form method="POST" action="{{ url_for('edit_employee', emp_id=employee.Employee_No) }}">
         <fieldset>
             <legend>Basic Information</legend>
             <label for="employee_name">Name:</label>
-            <input type="text" id="employee_name" name="employee_name" required><br>
+            <input type="text" id="employee_name" name="employee_name" value="{{ employee.Employee_Name }}" required><br>
 
             <label for="phone_number">Phone Number:</label>
-            <input type="tel" id="phone_number" name="phone_number" required><br>
+            <input type="tel" id="phone_number" name="phone_number" value="{{ employee.Phone_Number }}" required><br>
 
             <label for="title">Job Title (Select or Type New):</label>
-            <input type="text" id="title" name="title" list="title_suggestions" required>
+            <input type="text" id="title" name="title" list="title_suggestions" value="{{ employee.Title }}" required>
             <datalist id="title_suggestions">
                 {% for title in titles %}
                     <option value="{{ title }}">
@@ -35,28 +35,33 @@
         <fieldset>
             <legend>Payroll Details</legend>
             <label>Pay Type:</label>
-            <input type="radio" id="pay_salaried" name="pay_type" value="salaried" checked onclick="togglePayFields(false)">
+            <input type="radio" id="pay_salaried" name="pay_type" value="salaried" 
+                   {% if not employee.Is_Hourly %}checked{% endif %} onclick="togglePayFields(false)">
             <label for="pay_salaried">Salaried</label>
-            <input type="radio" id="pay_hourly" name="pay_type" value="hourly" onclick="togglePayFields(true)">
+            <input type="radio" id="pay_hourly" name="pay_type" value="hourly" 
+                   {% if employee.Is_Hourly %}checked{% endif %} onclick="togglePayFields(true)">
             <label for="pay_hourly">Hourly</label><br>
 
             <div id="salary_rate_field">
                 <label for="salary_rate">Salary (Monthly/Annual):</label>
-                <input type="number" id="salary_rate" name="salary_rate" step="0.01" min="0" required><br>
+                <input type="number" id="salary_rate" name="salary_rate" step="0.01" min="0"><br>
             </div>
             
-            <div id="hourly_rate_field" style="display:none;">
+            <div id="hourly_rate_field">
                 <label for="hourly_rate">Hourly Rate:</label>
-                <input type="number" id="hourly_rate" name="hourly_rate" step="0.01" min="0"><br>
+                <input type="number" id="hourly_rate" name="hourly_rate" step="0.01" min="0" 
+                       value="{{ '%.2f'|format(employee.Hourly_Rate) if employee.Hourly_Rate else '' }}"><br>
             </div>
         </fieldset>
 
         <fieldset>
             <legend>Organizational Affiliation</legend>
             <label>Affiliation Type:</label>
-            <input type="radio" id="aff_dept" name="affiliation_type" value="department" checked onclick="toggleAffiliation('department')">
+            <input type="radio" id="aff_dept" name="affiliation_type" value="department" 
+                   {% if employee.Department_Name %}checked{% endif %} onclick="toggleAffiliation('department')">
             <label for="aff_dept">Department</label>
-            <input type="radio" id="aff_div" name="affiliation_type" value="division" onclick="toggleAffiliation('division')">
+            <input type="radio" id="aff_div" name="affiliation_type" value="division" 
+                   {% if employee.Division_Name %}checked{% endif %} onclick="toggleAffiliation('division')">
             <label for="aff_div">Division</label><br>
 
             <div id="department_field">
@@ -64,27 +69,26 @@
                 <select id="department_name" name="department_name">
                     <option value="">(None)</option>
                     {% for dept in departments %}
-                        <option value="{{ dept }}">{{ dept }}</option>
+                        <option value="{{ dept }}" {% if employee.Department_Name == dept %}selected{% endif %}>{{ dept }}</option>
                     {% endfor %}
                 </select><br>
             </div>
 
-            <div id="division_field" style="display:none;">
+            <div id="division_field">
                 <label for="division_name">Division Name:</label>
                 <select id="division_name" name="division_name">
                     <option value="">(None)</option>
                     {% for div in divisions %}
-                        <option value="{{ div }}">{{ div }}</option>
+                        <option value="{{ div }}" {% if employee.Division_Name == div %}selected{% endif %}>{{ div }}</option>
                     {% endfor %}
                 </select><br>
             </div>
         </fieldset>
 
-        <button type="submit">Add Employee</button>
+        <button type="submit">Update Employee Record</button>
     </form>
 
     <script>
-
         function togglePayFields(isHourly) {
             const hourlyField = document.getElementById('hourly_rate_field');
             const hourlyInput = document.getElementById('hourly_rate');
@@ -92,7 +96,6 @@
             const salaryInput = document.getElementById('salary_rate');
 
             if (isHourly) {
-
                 hourlyField.style.display = 'block';
                 hourlyInput.setAttribute('required', 'required');
                 
@@ -100,12 +103,11 @@
                 salaryInput.removeAttribute('required');
                 salaryInput.value = ''; 
             } else {
-
                 hourlyField.style.display = 'none';
                 hourlyInput.removeAttribute('required');
-                hourlyInput.value = '';
-
+                
                 salaryField.style.display = 'block';
+
                 salaryInput.setAttribute('required', 'required'); 
             }
         }
@@ -123,11 +125,17 @@
             }
         }
         
+
         document.addEventListener('DOMContentLoaded', () => {
 
             togglePayFields(document.getElementById('pay_hourly').checked);
             
-            toggleAffiliation(document.querySelector('input[name="affiliation_type"]:checked').value);
+
+            if (document.getElementById('aff_dept').checked) {
+                toggleAffiliation('department');
+            } else if (document.getElementById('aff_div').checked) {
+                toggleAffiliation('division');
+            }
         });
     </script>
 {% endblock %}

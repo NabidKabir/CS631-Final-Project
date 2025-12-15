@@ -36,7 +36,6 @@ CREATE TABLE Project(
     Budget DECIMAL(12, 2),
     Date_Started DATE,
     Date_Ended DATE,
-    -- Added Manager_Employee_No to explicitly track the project manager
     Manager_Employee_No INT UNIQUE
 );
 
@@ -59,20 +58,19 @@ CREATE TABLE Employee(
     Phone_Number VARCHAR(20),
     Title VARCHAR(100),
     
-    -- Department_Name is NULLABLE to allow employees affiliated directly with a Division
     Department_Name VARCHAR(100), 
     
-    -- Added Division_Name for direct division employees
+
     Division_Name VARCHAR(100),
     
-    -- Added flags for payroll
+
     Is_Hourly BOOLEAN DEFAULT FALSE,
     Hourly_Rate DECIMAL(10, 2),
     
     FOREIGN KEY (Title) REFERENCES EmployeeTitle(Title),
     FOREIGN KEY (Department_Name) REFERENCES Department(Department_Name),
     FOREIGN KEY (Division_Name) REFERENCES Division(Division_Name)
-    -- You may also want to add FKs linking Head_Employee_No in Division/Department back here
+
 );
 
 -- ================================================================
@@ -85,30 +83,6 @@ CREATE TABLE Room (
     Building_Code VARCHAR(20),
     
     FOREIGN KEY (Building_Code) REFERENCES Building(Building_Code)
-);
-
--- ================================================================
--- EMPLOYEE_ROOM
--- ================================================================
-CREATE TABLE EmployeeRoom (
-    Employee_No INT PRIMARY KEY,
-    Room_Number INT UNIQUE,
-
-    FOREIGN KEY (Employee_No) REFERENCES Employee(Employee_No),
-    FOREIGN KEY (Room_Number) REFERENCES Room(Office_Number)
-);
-
-
--- ================================================================
--- DEPARTMENT_ROOM
--- ================================================================
-CREATE TABLE DepartmentRoom (
-    Department_Name VARCHAR(100),
-    Room_Number INT,
-    PRIMARY KEY (Department_Name, Room_Number),
-
-    FOREIGN KEY (Department_Name) REFERENCES Department(Department_Name),
-    FOREIGN KEY (Room_Number) REFERENCES Room(Office_Number)
 );
 
 -- ================================================================
@@ -157,3 +131,79 @@ ADD FOREIGN KEY (Head_Employee_No) REFERENCES Employee(Employee_No);
 
 ALTER TABLE Project
 ADD FOREIGN KEY (Manager_Employee_No) REFERENCES Employee(Employee_No);
+
+-- ================================================================
+-- Relational queries for populating database with fake data for testing.
+-- ================================================================
+
+INSERT INTO Building (Building_Code, Building_Name, Year_Bought, Cost) VALUES
+('HQ01', 'Main Headquarters', 2005, 15000000.00),
+('ANNX', 'West Annex Building', 2018, 5500000.00);
+
+INSERT INTO Room (Office_Number, Square_Feet, Type, Building_Code) VALUES
+(101, 200, 'Office', 'HQ01'),
+(102, 350, 'Conference', 'HQ01'),
+(201, 150, 'Office', 'HQ01'),
+(301, 180, 'Office', 'ANNX'),
+(302, 100, 'Storage', 'ANNX');
+
+INSERT INTO EmployeeTitle (Title, Salary) VALUES
+('CEO', 25000.00),         
+('VP of Technology', 18000.00),
+('Software Engineer L4', 10000.00),
+('HR Coordinator', 6000.00),
+('Project Technician', 0.00);
+
+INSERT INTO Division (Division_Name, Head_Employee_No) VALUES
+('Executive', NULL),
+('Technology', NULL),
+('Human Resources', NULL);
+
+INSERT INTO Department (Department_Name, Budget, Division_Name, Head_Employee_No) VALUES
+('Software Development', 1200000.00, 'Technology', NULL),
+('IT Infrastructure', 500000.00, 'Technology', NULL),
+('Recruitment', 150000.00, 'Human Resources', NULL);
+
+INSERT INTO Employee (Employee_No, Employee_Name, Phone_Number, Title, Department_Name, Division_Name, Is_Hourly, Hourly_Rate) VALUES
+--Salaried Employees
+(1001, 'Alice Johnson', '555-1001', 'CEO', NULL, 'Executive', FALSE, NULL),           
+(1002, 'Bob Smith', '555-1002', 'VP of Technology', NULL, 'Technology', FALSE, NULL), 
+(1003, 'Charlie Brown', '555-1003', 'Software Engineer L4', 'Software Development', NULL, FALSE, NULL),
+(1004, 'Dana Scully', '555-1004', 'HR Coordinator', 'Recruitment', NULL, FALSE, NULL), 
+(1005, 'Eve Adams', '555-1005', 'HR Coordinator', NULL, 'Human Resources', FALSE, NULL),
+-- Hourly Employees
+(2001, 'Frank Miller', '555-2001', 'Project Technician', NULL, NULL, TRUE, 35.00),
+(2002, 'Grace Lee', '555-2002', 'Project Technician', 'IT Infrastructure', NULL, TRUE, 45.50);
+
+
+UPDATE Division SET Head_Employee_No = 1001 WHERE Division_Name = 'Executive';
+UPDATE Division SET Head_Employee_No = 1002 WHERE Division_Name = 'Technology';
+
+
+UPDATE Department SET Head_Employee_No = 1003 WHERE Department_Name = 'Software Development';
+UPDATE Department SET Head_Employee_No = 1004 WHERE Department_Name = 'Recruitment';
+
+
+INSERT INTO Project (Project_No, Budget, Date_Started, Date_Ended, Manager_Employee_No) VALUES
+(101, 500000.00, '2025-01-15', '2025-06-30', 1003), 
+(102, 120000.00, '2025-03-01', '2025-05-15', 1002);
+
+
+INSERT INTO EmployeeRoom (Employee_No, Room_Number) VALUES
+(1001, 101),
+(1003, 201), 
+(1004, 301); 
+
+
+INSERT INTO DepartmentRoom (Department_Name, Room_Number) VALUES
+('Software Development', 102), 
+('Recruitment', 302);         
+
+
+INSERT INTO EmployeeProject (Employee_No, Project_No, Role, Hours_Worked, Date_Started, Date_Ended) VALUES
+(1003, 102, 'Lead Developer', 400.00, '2025-03-01', '2025-05-15'),
+(2001, 101, 'Technician', 80.00, '2025-05-01', NULL),
+(2002, 101, 'Engineer', 160.00, '2025-04-10', NULL);
+
+INSERT INTO Payroll_History (Employee_No, Payment_Date, Gross_Pay, Federal_Tax, State_Tax, Other_Tax, Net_Pay) VALUES
+(1001, '2025-11-30', 25000.00, 2500.00, 1250.00, 750.00, 20500.00);
