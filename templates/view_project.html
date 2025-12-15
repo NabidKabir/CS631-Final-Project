@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Project P{{ project.Project_No }} Details{% endblock %}
+
+{% block content %}
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div style="margin-bottom: 20px;">
+                {% for category, message in messages %}
+                    <div style="padding: 10px; border-radius: 4px; color: white; margin-bottom: 10px; background-color: {% if category == 'error' %}#dc3545{% elif category == 'success' %}#28a745{% else %}#ffc107{% endif %};">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <p><a href="{{ url_for('pm_dashboard') }}" style="padding: 10px; background-color: gray; color: white; text-decoration: none; border-radius: 4px;">← Back to PM Dashboard</a></p>
+
+    <h1>Project P{{ project.Project_No }} Details</h1>
+    
+    <div style="display: flex; justify-content: space-between; gap: 30px; margin-top: 20px;">
+        
+        <div style="flex: 1; border: 1px solid #ccc; padding: 20px; border-radius: 5px; background-color: #f9f9f9;">
+            <h2>Project Summary</h2>
+            <p><strong>Project Number:</strong> P{{ project.Project_No }}</p>
+            <p><strong>Manager:</strong> {{ project.manager.Employee_Name if project.manager else 'N/A' }}</p>
+            <p><strong>Budget:</strong> ${{ "%.2f"|format(project.Budget or 0) }}</p>
+            <p><strong>Date Started:</strong> {{ project.Date_Started.strftime('%Y-%m-%d') if project.Date_Started else 'N/A' }}</p>
+            <p>
+                <strong>Status:</strong> 
+                {% if project.Date_Ended %}
+                    <span style="color: red;">Completed on {{ project.Date_Ended.strftime('%Y-%m-%d') }}</span>
+                {% else %}
+                    <span style="color: green;">Active</span>
+                {% endif %}
+            </p>
+            <p><strong>Total Hours Tracked:</strong> {{ "%.2f"|format(total_hours) }} hrs</p>
+        </div>
+
+        <div style="flex: 1; border: 1px solid #ccc; padding: 20px; border-radius: 5px; background-color: #f9f9f9;">
+            <h2>Team & Assignments</h2>
+            <p><strong>Active Team Members:</strong> {{ team|length }}</p>
+            
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;">
+                <h4>Add Team Member</h4>
+                <form method="POST" action="{{ url_for('add_team_member', project_id=project.Project_No) }}">
+                    <label for="employee_no" style="display: block; font-weight: bold; font-size: 0.9em;">Employee:</label>
+                    <select id="employee_no" name="employee_no" required style="width: 100%; padding: 8px; margin-bottom: 10px;">
+                        <option value="">-- Select Employee --</option>
+                        {% for employee in all_employees %}
+                            <option value="{{ employee.Employee_No }}">{{ employee.Employee_Name }} ({{ employee.Title }})</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <label for="role" style="display: block; font-weight: bold; font-size: 0.9em;">Role (Optional):</label>
+                    <input type="text" id="role" name="role" placeholder="e.g., QA Specialist" style="width: 100%; padding: 8px; margin-bottom: 10px;">
+
+                    <label for="assignment_start_date" style="display: block; font-weight: bold; font-size: 0.9em;">Start Date:</label>
+                    <input type="date" id="assignment_start_date" name="date_started" required style="width: 100%; padding: 8px; margin-bottom: 15px;">
+                    
+                    <button type="submit" style="padding: 8px 15px; background-color: green; color: white; border: none; border-radius: 4px; cursor: pointer;">Assign Member</button>
+                </form>
+            </div>
+            
+            <h4 style="margin-top: 20px;">Current Team:</h4>
+            <table style="width: 100%; font-size: 0.9em; margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Role</th>
+                        <th>Hours Logged</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assignment in team %}
+                    <tr>
+                        <td>{{ assignment.employee.Employee_Name }}</td>
+                        <td>{{ assignment.Role }}</td>
+                        <td>{{ "%.2f"|format(assignment.Hours_Worked) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <h2 style="margin-top: 30px;">Milestone History ({{ milestone_stats.total }} Logged)</h2>
+    
+    <div style="padding: 15px; background-color: lightblue; border: 1px solid lightblue; margin-bottom: 20px; border-radius: 5px;">
+        <h3>Log New Milestone</h3>
+        <form method="POST" action="{{ url_for('add_milestone', project_id=project.Project_No) }}" style="display: flex; gap: 10px; align-items: flex-end;">
+            
+            <div style="flex: 3;">
+                <label for="milestone_description" style="display: block; font-weight: bold; font-size: 0.9em;">Description:</label>
+                <textarea id="milestone_description" name="milestone_description" rows="1" required style="width: 100%; padding: 8px; box-sizing: border-box;"></textarea>
+            </div>
+            
+            <div style="flex: 1;">
+                <label for="date_logged" style="display: block; font-weight: bold; font-size: 0.9em;">Date:</label>
+                <input type="date" id="date_logged" name="date_logged" required style="width: 100%; padding: 8px; box-sizing: border-box;">
+            </div>
+            
+            <button type="submit" style="padding: 8px 15px; background-color: blue; color: white; border: none; border-radius: 4px; cursor: pointer;">Log</button>
+        </form>
+    </div>
+    
+    {% if milestones %}
+    <ul style="list-style: none; padding: 0;">
+        {% for milestone in milestones %}
+        <li style="border: 1px solid #eee; padding: 10px; margin-bottom: 10px; border-left: 5px solid blue;">
+            <strong>Logged: {{ milestone.Date_Logged.strftime('%Y-%m-%d') }}</strong>
+            <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #333;">
+                {{ milestone.milestone_description }} 
+            </p>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No milestones defined for this project yet.</p>
+    {% endif %}
+
+{% endblock %}

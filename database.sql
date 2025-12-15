@@ -119,6 +119,15 @@ CREATE TABLE Payroll_History (
     FOREIGN KEY (Employee_No) REFERENCES Employee(Employee_No)
 );
 
+CREATE TABLE ProjectMilestone (
+    Milestone_No INT PRIMARY KEY AUTO_INCREMENT, 
+    Project_No INT NOT NULL,                    
+    milestone_description TEXT NOT NULL,                  
+    Date_Logged DATE NOT NULL,                
+
+    FOREIGN KEY (Project_No) REFERENCES Project(Project_No)
+);
+
 -- ================================================================
 -- Adding Foreign Keys for Head Employees
 -- Note: It's best practice to add these after the Employee table is defined.

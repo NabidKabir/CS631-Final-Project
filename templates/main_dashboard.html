@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Application Hub{% endblock %}
+
+{% block content %}
+    <h1>Main Application Hub</h1>
+    <p>Please select the application you wish to access:</p>
+
+    <div style="display: flex; gap: 20px; margin-top: 30px;">
+        <a href="{{ url_for('hr_dashboard') }}" style="padding: 20px; background-color: green; color: white; text-decoration: none; border-radius: 8px; font-size: 1.2em; text-align: center;">
+            <p>HR & Payroll Management</p>
+            <small>Manage employees, salary, and payment history.</small>
+        </a>
+        <a href="{{ url_for('pm_dashboard') }}" style="padding: 20px; background-color: blue; color: white; text-decoration: none; border-radius: 8px; font-size: 1.2em; text-align: center;">
+            <p>Project Management (PM)</p>
+            <small>Create projects, assign teams, and track milestones.</small>
+        </a>
+    </div>
+{% endblock %}

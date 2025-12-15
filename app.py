@@ -1,8 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func, select
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 import os
 
@@ -54,6 +55,8 @@ class Employee(db.Model):
     )
     payroll_history = db.relationship('PayrollHistory', backref='employee', lazy=True)
 
+    projects_managed = db.relationship('Project', back_populates='manager', lazy=True)
+
     Is_Active = db.Column(db.Boolean, default=True)
 
 class Department(db.Model):
@@ -73,6 +76,8 @@ class Project(db.Model):
     Date_Ended = db.Column(db.Date)
     Manager_Employee_No = db.Column(db.Integer, db.ForeignKey('Employee.Employee_No'), unique=True)
     employees_on_project = db.relationship('EmployeeProject', back_populates='project', lazy=True)
+    milestones = db.relationship('ProjectMilestone', back_populates='project', lazy=True)
+    manager = db.relationship('Employee', back_populates='projects_managed', lazy=True)
 
 class Building(db.Model):
     __tablename__ = 'Building'
@@ -130,10 +135,32 @@ class PayrollHistory(db.Model):
     Other_Tax = db.Column(db.Numeric(12, 2)) 
     Net_Pay = db.Column(db.Numeric(12, 2))
 
+class ProjectMilestone(db.Model):
+    __tablename__ = 'ProjectMilestone'
+    Milestone_No = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    Project_No = db.Column(db.Integer, db.ForeignKey('Project.Project_No'), nullable=False)
+    milestone_description = db.Column(db.Text, nullable=False)
+    Date_Logged = db.Column(db.Date, nullable=False)
+    
+    project = db.relationship('Project', back_populates='milestones', lazy=True)
 
-#DASHBOARD
+#---------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------
+# Main Dashboard
+#---------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------
 @app.route('/')
-def index():
+def main_dashboard():
+    """Renders the main application hub with links to HR and PM applications."""
+    return render_template('main_dashboard.html')
+
+#---------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------
+# Human Resources/Payment Routes
+#---------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------
+@app.route('/hr_dashboard')
+def hr_dashboard():
     """Renders the main employee list dashboard, including project data."""
     try:
         # Fetch all employees.
@@ -142,10 +169,10 @@ def index():
         ).all()
         
 
-        return render_template('index.html', employees=employees)
+        return render_template('hr_dashboard.html', employees=employees)
     except Exception as e:
         flash(f"Database Error: Could not fetch employee data. Error: {e}", 'error')
-        return render_template('index.html', employees=[])  
+        return render_template('hr_dashboard.html', employees=[])  
     
 @app.route('/payroll/<int:emp_id>', methods=['POST'])
 def generate_payroll(emp_id):
@@ -158,7 +185,6 @@ def generate_payroll(emp_id):
     OTHER_TAX_RATE = 0.03
     
     try:
-        # 1. Determine Gross Pay
         gross_pay = 0.0
         
         if employee.Is_Hourly:
@@ -166,22 +192,20 @@ def generate_payroll(emp_id):
             hours_str = request.form.get('hours')
             if not hours_str:
                 flash("Hourly employee payroll requires hours worked.", 'warning')
-                return redirect(url_for('index'))
+                return redirect(url_for('hr_dashboard'))
             
             hours_worked = float(hours_str)
             gross_pay = float(employee.Hourly_Rate) * hours_worked
         else:
-            # Salaried Employee (Assuming EmployeeTitle has a Salary)
-            # Fetch the title object to get the salary value
+
             title_obj = EmployeeTitle.query.get(employee.Title)
             if title_obj:
-                # Assuming this is the gross *monthly* salary
+                # Assuming this is the gross monthly salary
                 gross_pay = float(title_obj.Salary) 
             else:
                 flash(f"Error: Salaried employee {employee.Employee_Name} has no defined salary.", 'error')
-                return redirect(url_for('index'))
+                return redirect(url_for('hr_dashboard'))
 
-        # 2. Calculate Taxes
         gross_pay = round(gross_pay, 2)
         fed_tax = round(gross_pay * FEDERAL_TAX_RATE, 2)
         state_tax = round(gross_pay * STATE_TAX_RATE, 2)
@@ -190,7 +214,6 @@ def generate_payroll(emp_id):
         
         net_pay = round(gross_pay - total_deductions, 2)
         
-        # 3. Save to History
         new_record = PayrollHistory(
             Employee_No=emp_id,
             Payment_Date=datetime.now().date(),
@@ -210,9 +233,8 @@ def generate_payroll(emp_id):
         db.session.rollback()
         flash(f"Payroll failed for {employee.Employee_Name}. Error: {e}", 'error')
         
-    return redirect(url_for('index'))
+    return redirect(url_for('hr_dasboard'))
 
-# ADD EMPLOYEE PAGE
 @app.route('/add_employee', methods=['GET', 'POST'])
 def add_employee():
     """Displays the form or processes the form submission to add a new employee, 
@@ -285,7 +307,7 @@ def add_employee():
             db.session.add(new_employee)
             db.session.commit()
             flash(f"Employee {employee_name} ({new_emp_no}) successfully added! Title '{title}' created/used.", 'success')
-            return redirect(url_for('index'))
+            return redirect(url_for('hr_dashboard'))
 
         except Exception as e:
             db.session.rollback()
@@ -295,7 +317,6 @@ def add_employee():
 
     return render_template('add_employee.html', **context)
 
-# EDIT EMPLOYEE
 @app.route('/edit_employee/<int:emp_id>', methods=['GET', 'POST'])
 def edit_employee(emp_id):
     """Handles displaying the pre-filled form and processing updates for an employee."""
@@ -358,14 +379,13 @@ def edit_employee(emp_id):
             
             db.session.commit()
             flash(f"Employee {employee.Employee_Name}'s record (ID: {emp_id}) updated successfully!", 'success')
-            return redirect(url_for('index'))
+            return redirect(url_for('hr_dashboard'))
 
         except Exception as e:
             db.session.rollback()
             flash(f"Error updating employee {employee.Employee_Name}. Error: {e}", 'error')
             return render_template('edit_employee.html', employee=employee, **context)
-
-# FIRE EMPLOYEE     
+  
 @app.route('/fire_employee/<int:emp_id>', methods=['POST'])
 def fire_employee(emp_id):
     employee = Employee.query.get_or_404(emp_id)
@@ -378,7 +398,7 @@ def fire_employee(emp_id):
             db.session.rollback()
             # Prevent firing if the employee is still leading a team
             flash(f"Cannot terminate {employee.Employee_Name}. They must first be relieved of their duties as a Division Head or Department Head.", 'error')
-            return redirect(url_for('index'))
+            return redirect(url_for('hr_dashboard'))
             
         employee.Is_Active = False
         db.session.commit()
@@ -388,9 +408,8 @@ def fire_employee(emp_id):
         db.session.rollback()
         flash(f"Failed to terminate employee {employee.Employee_Name}. Error: {e}", 'error')
         
-    return redirect(url_for('index'))
+    return redirect(url_for('hr_dashboard'))
 
-# PAYROLL HISTORY PAGE
 @app.route('/payroll_history')
 def payroll_history():
     try:
@@ -403,6 +422,267 @@ def payroll_history():
     except Exception as e:
         flash(f"Error fetching payroll history: {e}", 'error')
         return render_template('payroll_history.html', records=[])
+
+#---------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------
+# Project Management Routes
+#---------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------    
+@app.route('/pm_dashboard')
+def pm_dashboard():
+    """
+    Renders the Project Management dashboard
+    """
+    try:
+
+        projects = Project.query.options(
+            db.joinedload(Project.manager),
+            db.joinedload(Project.milestones)
+        ).all()
+        
+        # Calculate Total Hours Worked per Project
+        hours_query = db.session.query(
+            EmployeeProject.Project_No,
+            func.sum(EmployeeProject.Hours_Worked).label('total_hours')
+        ).group_by(EmployeeProject.Project_No).all()
+        
+        hours_map = {item.Project_No: item.total_hours for item in hours_query}
+        
+        # Calculate Active Team Size per Project
+        team_size_query = db.session.query(
+            EmployeeProject.Project_No,
+            func.count(EmployeeProject.Employee_No).label('active_team_size')
+        ).filter(EmployeeProject.Date_Ended == None
+        ).group_by(EmployeeProject.Project_No).all()
+
+        team_size_map = {item.Project_No: item.active_team_size for item in team_size_query}
+
+        projects_with_stats = []
+        for project in projects:
+            
+            total_milestones = len(project.milestones)
+            
+            project_data = {
+                'project': project,
+                'team_count': team_size_map.get(project.Project_No, 0),
+                'total_hours': hours_map.get(project.Project_No, Decimal('0.00')),
+                'total_milestones': total_milestones
+            }
+            projects_with_stats.append(project_data)
+            
+        return render_template('pm_dashboard.html', projects=projects_with_stats)
+        
+    except Exception as e:
+        print(f"ERROR: Failed to load PM Dashboard data: {e}") 
+        flash(f"Error fetching projects: {e}", 'error')
+        return render_template('pm_dashboard.html', projects=[])
+    
+@app.route('/project/<int:project_id>')
+def view_project(project_id):
+    try:
+        project = Project.query.get_or_404(project_id)
+        
+        team_assignments = EmployeeProject.query.filter(
+            EmployeeProject.Project_No == project_id,
+            EmployeeProject.Date_Ended.is_(None)
+        ).options(joinedload(EmployeeProject.employee)).all()
+        
+        # Calculate total hours (for display in summary card)
+        total_hours_result = db.session.query(
+            func.sum(EmployeeProject.Hours_Worked).label('total_hours')
+        ).filter(EmployeeProject.Project_No == project_id).scalar()
+        
+        total_hours = total_hours_result if total_hours_result is not None else Decimal('0.00')
+
+        # --- Milestones ---
+        milestones = ProjectMilestone.query.filter_by(Project_No=project_id).order_by(ProjectMilestone.Date_Logged.desc()).all()
+        milestone_stats = {'total': len(milestones)}
+
+        all_employees = Employee.query.filter_by(Is_Active=True).order_by(Employee.Employee_Name).all()
+        
+        context = {
+            'project': project,
+            'team': team_assignments,
+            'total_hours': total_hours,
+            'milestones': milestones,
+            'milestone_stats': milestone_stats,
+            'all_employees': all_employees
+        }
+        
+        return render_template('view_project.html', **context)
+        
+    except Exception as e:
+        print(f"Error fetching project data in view_project: {e}")
+        flash(f"Error fetching project data: {e}", 'error')
+        return redirect(url_for('pm_dashboard'))
+
+@app.route('/create_project', methods=['GET', 'POST'])
+def create_project():
+    """Handles creating a new project"""
+    
+    active_employees = Employee.query.filter_by(Is_Active=True).order_by(Employee.Employee_Name).all()
+
+    if request.method == 'POST':
+        try:
+            project_no_str = request.form.get('project_no')
+            budget_str = request.form.get('budget')
+            date_started_str = request.form.get('date_started')
+            manager_id = request.form.get('manager_employee_no')
+            
+            if not all([project_no_str, budget_str, date_started_str, manager_id]):
+                flash("All required project fields must be filled out.", 'error')
+                return render_template('create_project.html', employees=active_employees)
+
+            project_no = int(project_no_str)
+            budget = Decimal(budget_str)
+            date_started = datetime.strptime(date_started_str, '%Y-%m-%d').date()
+            manager_id = int(manager_id)
+            
+            if Project.query.get(project_no):
+                flash(f"Project Number P{project_no} already exists. Please choose a unique number.", 'error')
+                return render_template('create_project.html', employees=active_employees)
+
+            existing_manager_project = Project.query.filter_by(Manager_Employee_No=manager_id, Date_Ended=None).first()
+            if existing_manager_project:
+                flash(f"Employee {manager_id} is already managing Project P{existing_manager_project.Project_No}. Please select a different manager.", 'error')
+                return render_template('create_project.html', employees=active_employees)
+
+            new_project = Project(
+                Project_No=project_no, 
+                Budget=budget,
+                Date_Started=date_started,
+                Manager_Employee_No=manager_id,
+            )
+            db.session.add(new_project)
+            
+            manager_assignment = EmployeeProject(
+                Employee_No=manager_id,
+                Project_No=new_project.Project_No,
+                Role='Project Manager',
+                Hours_Worked=Decimal('0.00'),
+                Date_Started=date_started
+            )
+            db.session.add(manager_assignment)
+            
+            db.session.commit()
+            
+            flash(f"Project P{project_no} created successfully. Project Manager assigned.", 'success')
+            return redirect(url_for('pm_dashboard'))
+            
+        except ValueError:
+            db.session.rollback()
+            flash("Invalid input for Project Number, Budget, or Employee ID. Please check the values.", 'error')
+            return render_template('create_project.html', employees=active_employees)
+        
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error creating project: {e}", 'error')
+            return render_template('create_project.html', employees=active_employees)
+
+    return render_template('create_project.html', employees=active_employees)
+
+@app.route('/complete_project/<int:project_id>', methods=['POST'])
+def complete_project(project_id): 
+    """Handles marking a project as complete."""
+    try:
+        project = Project.query.get_or_404(project_id)
+
+        if not project.Date_Ended:
+            project.Date_Ended = date.today()
+            
+            active_assignments = EmployeeProject.query.filter_by(
+                Project_No=project_id, 
+                Date_Ended=None
+            ).all()
+            
+            for assignment in active_assignments:
+                assignment.Date_Ended = date.today()
+            
+            db.session.commit()
+            flash(f"Project '{project.Project_Name or project_id}' marked as complete, and all active team assignments have ended.", 'success')
+        else:
+            flash(f"Project '{project.Project_Name or project_id}' was already complete.", 'info')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Failed to complete project: {e}", 'error')
+        
+    return redirect(url_for('pm_dashboard'))
+
+@app.route('/add_milestone/<int:project_id>', methods=['POST'])
+def add_milestone(project_id):
+    """Handles logging a new milestone for a project."""
+    try:
+        project = Project.query.get_or_404(project_id)
+        
+        description = request.form.get('milestone_description')
+        date_logged_str = request.form.get('date_logged')
+
+        if not all([description, date_logged_str]):
+            flash("Milestone description and date are required.", 'error')
+            return redirect(url_for('view_project', project_id=project_id))
+        
+        date_logged = datetime.strptime(date_logged_str, '%Y-%m-%d').date()
+
+        new_milestone = ProjectMilestone(
+            Project_No=project_id,
+            milestone_description=description, 
+            Date_Logged=date_logged
+        )
+        db.session.add(new_milestone)
+        db.session.commit()
+        
+        flash(f"Milestone logged successfully for Project P{project_id}.", 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error logging milestone: {e}", 'error')
+        
+    return redirect(url_for('view_project', project_id=project_id))
+
+@app.route('/add_team_member/<int:project_id>', methods=['POST'])
+def add_team_member(project_id):
+    """Handles adding an existing employee to a project team."""
+    try:
+        project = Project.query.get_or_404(project_id)
+
+        employee_id = request.form.get('employee_no')
+        role = request.form.get('role', 'Team Member').strip()
+        date_started_str = request.form.get('date_started')
+
+        if not all([employee_id, date_started_str]):
+            flash("Employee and start date are required for assignment.", 'error')
+            return redirect(url_for('view_project', project_id=project_id))
+
+        employee_id = int(employee_id)
+        date_started = datetime.strptime(date_started_str, '%Y-%m-%d').date()
+
+        # Check for existing active assignment
+        existing_assignment = EmployeeProject.query.filter_by(
+            Project_No=project_id, 
+            Employee_No=employee_id, 
+            Date_Ended=None 
+        ).first()
+
+        if existing_assignment:
+            flash(f"Employee {employee_id} is already actively assigned to this project.", 'warning')
+        else:
+            new_assignment = EmployeeProject(
+                Project_No=project_id,
+                Employee_No=employee_id,
+                Role=role,
+                Hours_Worked=Decimal('0.00'),
+                Date_Started=date_started
+            )
+            db.session.add(new_assignment)
+            db.session.commit()
+            flash(f"Employee {employee_id} assigned as '{role}' to Project P{project_id}.", 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error adding team member: {e}", 'error')
+        
+    return redirect(url_for('view_project', project_id=project_id))
     
 if __name__ == '__main__':
     app.run(debug=True)

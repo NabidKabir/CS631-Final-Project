@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Create New Project{% endblock %}
+
+{% block content %}
+    
+    <p><a href="{{ url_for('pm_dashboard') }}" style="padding: 10px; background-color: gray; color: white; text-decoration: none; border-radius: 4px;">← Back to PM Dashboard</a></p>
+
+    <h1>Create New Project</h1>
+
+    <form method="POST" action="{{ url_for('create_project') }}" style="max-width: 600px; margin-top: 20px;">
+        
+        <fieldset style="border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; border-radius: 5px;">
+            <legend style="font-size: 1.2em; font-weight: bold;">Project Details</legend>
+            
+            <label for="project_no">Project Number (PK):</label>
+            <input type="number" id="project_no" name="project_no" min="1" required style="width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box;">
+
+            <label for="budget">Budget ($):</label>
+            <input type="number" id="budget" name="budget" step="0.01" min="0" required style="width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box;">
+
+            <label for="date_started">Start Date:</label>
+            <input type="date" id="date_started" name="date_started" required style="width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box;">
+
+            <label for="manager_employee_no">Project Manager:</label>
+            <select id="manager_employee_no" name="manager_employee_no" required style="width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box;">
+                <option value="">-- Select a Manager --</option>
+                {% for employee in employees %}
+                    <option value="{{ employee.Employee_No }}">{{ employee.Employee_Name }} ({{ employee.Title }})</option>
+                {% endfor %}
+            </select>
+        </fieldset>
+
+        <button type="submit" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1.1em;">
+            Create Project
+        </button>
+    </form>
+{% endblock %}
