@@ -233,7 +233,7 @@ def generate_payroll(emp_id):
         db.session.rollback()
         flash(f"Payroll failed for {employee.Employee_Name}. Error: {e}", 'error')
         
-    return redirect(url_for('hr_dasboard'))
+    return redirect(url_for('hr_dashboard'))
 
 @app.route('/add_employee', methods=['GET', 'POST'])
 def add_employee():
@@ -599,9 +599,9 @@ def complete_project(project_id):
                 assignment.Date_Ended = date.today()
             
             db.session.commit()
-            flash(f"Project '{project.Project_Name or project_id}' marked as complete, and all active team assignments have ended.", 'success')
+            flash(f"Project '{project.Project_No or project_id}' marked as complete, and all active team assignments have ended.", 'success')
         else:
-            flash(f"Project '{project.Project_Name or project_id}' was already complete.", 'info')
+            flash(f"Project '{project.Project_No or project_id}' was already complete.", 'info')
 
     except Exception as e:
         db.session.rollback()

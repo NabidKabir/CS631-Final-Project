@@ -3,8 +3,8 @@
 {% block title %}Edit Employee: {{ employee.Employee_Name }}{% endblock %}
 
 {% block content %}
-    <h1>✏️ Edit Employee: {{ employee.Employee_Name }} (ID: {{ employee.Employee_No }})</h1>
-    <p><a href="{{ url_for('index') }}">← Back to Dashboard</a></p>
+    <h1>Edit Employee: {{ employee.Employee_Name }} (ID: {{ employee.Employee_No }})</h1>
+    <p><a href="{{ url_for('main_dashboard') }}">← Back to Dashboard</a></p>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}

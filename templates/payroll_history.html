@@ -5,7 +5,7 @@
 {% block content %}
     <h1>Payroll History</h1>
 
-    <a href="{{ url_for('index') }}">← Back to Employee Dashboard</a>
+    <a href="{{ url_for('hr_dashboard') }}">← Back to Employee Dashboard</a>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
